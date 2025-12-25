@@ -1,0 +1,21 @@
+python3 -m backend.graph_extractor.extractor
+Success lib
+Health check: {'chat_server': True, 'embedding_server': True, 'chat_url': 'http://localhost:8887/v1', 'embed_url': 'http://localhost:8009/v1'}
+Loading Json/Jsonl files from /mnt/hps/dungmt19_workspace/KBS/data ... 
+Found 1 files
+Processing chunks.jsonl...
+Loaded 142 records from chunks.jsonl
+Total: 142 records from 1 files
+Loaded 142 records in 0.00s
+Processing record 1/142...
+Source: unknown
+Text length: 255 characters
+Extracting nodes...
+Unknown response format: <class 'backend.llm.base.llm_client.LLMResponse'>
+0 nodes in 2.18s
+No nodes, skipping edges
+Processing record 2/142...
+Source: unknown
+Text length: 1398 characters
+Extracting nodes...
+Unknown response format: <class 'backend.llm.base.llm_client.LLMResponse'>
