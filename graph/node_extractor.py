@@ -31,8 +31,14 @@ class AUTOSARNodeExtractor:
         context_right = text[end_idx:right_end]
         return context_left, context_right
 
-    def extract(self, text: str, file_name: str = 'unknown') -> List[Dict]:
-        """Extract AUTOSAR entities from text."""
+    def extract(self, text: str, file_name: str = 'unknown', metadata: Dict = None) -> List[Dict]:
+        """Extract AUTOSAR entities from text.
+
+        Args:
+            text: Text to extract entities from
+            file_name: Source file name
+            metadata: Optional metadata dictionary with fields like doc_id, platform, modules
+        """
         if not text or not text.strip():
             return []
 
@@ -93,15 +99,20 @@ class AUTOSARNodeExtractor:
                 if name:
                     context_left, context_right = self.extract_context(
                         text, mention)
-                    output.append({
+                    node_dict = {
                         "name": name,
                         "semantic_type": semantic_type,
                         "mention": mention,
                         "context_left": context_left,
                         "context_right": context_right,
                         "source_file": file_name,
+                    }
 
-                    })
+                    # Tự động thêm TẤT CẢ metadata fields từ JSON vào node
+                    if metadata:
+                        node_dict.update(metadata)
+
+                    output.append(node_dict)
 
             return output
 

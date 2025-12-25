@@ -78,6 +78,17 @@ class AUTOSAREdgeExtractor:
                 else:
                     raise ValueError("Could not parse JSON from response")
 
+            # Normalize field names: fix typo "envidence" -> "evidence" and add default if missing
+            if isinstance(resp_dict, dict) and "edges" in resp_dict:
+                for edge in resp_dict.get("edges", []):
+                    if isinstance(edge, dict):
+                        # Fix typo "envidence" -> "evidence"
+                        if "envidence" in edge:
+                            edge["evidence"] = edge.pop("envidence")
+                        # Add default evidence if missing
+                        if "evidence" not in edge:
+                            edge["evidence"] = ""
+
             # Convert dict to ExtractedEdges
             if isinstance(resp_dict, dict):  # fix
                 edges_result = ExtractedEdges(**resp_dict)

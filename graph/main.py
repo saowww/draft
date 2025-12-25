@@ -5,14 +5,14 @@ from pathlib import Path
 try:
     # Try relative imports first (when used as package)
     from .csv_writer import save_edges_csv, save_nodes_csv
-    from .data_loader import extract_text_from_data, load_json_files
+    from .data_loader import extract_text_from_data, load_json_files, extract_metadata_from_data
     from .edge_extractor import AUTOSAREdgeExtractor
     from .node_extractor import AUTOSARNodeExtractor
     from .vllm_client import VLLMClient
 except ImportError:
     # Fallback to absolute imports (when run directly)
     from csv_writer import save_edges_csv, save_nodes_csv
-    from data_loader import extract_text_from_data, load_json_files
+    from data_loader import extract_text_from_data, load_json_files, extract_metadata_from_data
     from edge_extractor import AUTOSAREdgeExtractor
     from node_extractor import AUTOSARNodeExtractor
     from vllm_client import VLLMClient
@@ -73,7 +73,11 @@ def main():
         # Extract nodes
         print("Extracting nodes...")
         node_start = time.time()
-        nodes = node_extractor.extract(text, file_name=source_file)
+
+        # Tự động lấy TẤT CẢ metadata từ JSON data (doc_id, platform, modules, layer, etc.)
+        metadata = extract_metadata_from_data(data)
+        nodes = node_extractor.extract(
+            text, file_name=source_file, metadata=metadata)
         node_time = time.time() - node_start
         print(f"{len(nodes)} nodes in {node_time:.2f}s")
 

@@ -11,7 +11,8 @@ def save_nodes_csv(nodes: List[Dict], filepath: Path, append: bool = False):
     fieldnames = set()
     for node in nodes:
         fieldnames.update(node.keys())
-    ordered_fields = ['name', 'semantic_type', 'source_file', 'level']
+    ordered_fields = ['name', 'semantic_type', 'source_file',
+                      'doc_id', 'platform', 'modules', 'level']
     other_fields = [f for f in fieldnames if f not in ordered_fields]
     fieldnames = ordered_fields + other_fields  # fix
 
