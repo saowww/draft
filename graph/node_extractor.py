@@ -31,6 +31,136 @@ class AUTOSARNodeExtractor:
         context_right = text[end_idx:right_end]
         return context_left, context_right
 
+    def _merge_duplicate_nodes(self, nodes: List[Dict]) -> List[Dict]:
+        """
+        Gộp các nodes trùng lặp (cùng name và semantic_type) và gộp context
+
+        Args:
+            nodes: List các node dictionaries
+
+        Returns:
+            List các nodes đã được gộp (mỗi node unique chỉ xuất hiện 1 lần)
+        """
+        # Nhóm nodes theo key (name + semantic_type)
+        node_groups = {}
+        for node in nodes:
+            key = (node.get('name', '').strip().lower(),
+                   node.get('semantic_type', '').strip().lower())
+
+            if key not in node_groups:
+                node_groups[key] = []
+            node_groups[key].append(node)
+
+        # Gộp các nodes trùng lặp
+        merged_nodes = []
+        for key, group in node_groups.items():
+            if len(group) == 1:
+                # Không trùng, giữ nguyên
+                merged_nodes.append(group[0])
+            else:
+                # Có trùng, gộp lại
+                base_node = group[0].copy()
+
+                # Gộp tất cả context_left và context_right
+                all_context_left = [n.get('context_left', '')
+                                    for n in group if n.get('context_left')]
+                all_context_right = [n.get('context_right', '')
+                                     for n in group if n.get('context_right')]
+
+                # Loại bỏ empty và duplicate
+                unique_left = list(dict.fromkeys(
+                    [c.strip() for c in all_context_left if c.strip()]))
+                unique_right = list(dict.fromkeys(
+                    [c.strip() for c in all_context_right if c.strip()]))
+
+                # Gộp context lại
+                merged_context_left = ' ... '.join(unique_left)
+                merged_context_right = ' ... '.join(unique_right)
+
+                base_node['context_left'] = merged_context_left
+                base_node['context_right'] = merged_context_right
+                base_node['_duplicate_count'] = len(group)  # Lưu số lần trùng
+
+                merged_nodes.append(base_node)
+
+        return merged_nodes
+
+    def _summarize_context_with_llm(self, context_left: str, context_right: str, entity_name: str) -> Tuple[str, str]:
+        """
+        Dùng LLM để rút gọn context đã gộp
+
+        Args:
+            context_left: Context bên trái đã gộp
+            context_right: Context bên phải đã gộp
+            entity_name: Tên của entity để LLM hiểu context
+
+        Returns:
+            Tuple (summarized_left, summarized_right)
+        """
+        if not context_left and not context_right:
+            return "", ""
+
+        # Tạo prompt để rút gọn context
+        prompt = f"""Bạn là một chuyên gia rút gọn văn bản. Hãy rút gọn các context sau đây về entity "{entity_name}" thành một câu ngắn gọn, giữ lại thông tin quan trọng nhất.
+
+Context bên trái (trước entity):
+{context_left}
+
+Context bên phải (sau entity):
+{context_right}
+
+Hãy trả về JSON với format:
+{{
+    "context_left": "câu rút gọn bên trái",
+    "context_right": "câu rút gọn bên phải"
+}}
+
+Chỉ trả về JSON, không giải thích thêm."""
+
+        try:
+            resp = self.client.generate(
+                user_prompt=prompt,
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                max_tokens=500
+            )
+
+            # Extract response text
+            if hasattr(resp, 'message'):
+                resp_text = resp.message
+            elif hasattr(resp, 'choices') and resp.choices:
+                resp_text = resp.choices[0].message.content
+            elif hasattr(resp, 'text'):
+                resp_text = resp.text
+            elif isinstance(resp, str):
+                resp_text = resp
+            else:
+                # Fallback: trả về context gốc nếu không parse được
+                return context_left[:200], context_right[:200]
+
+            # Clean markdown
+            resp_clean = re.sub(r'^```[a-z]*\n?', '',
+                                resp_text, flags=re.MULTILINE)
+            resp_clean = re.sub(r'```$', '', resp_clean,
+                                flags=re.MULTILINE).strip()
+
+            # Parse JSON
+            try:
+                result = json.loads(resp_clean)
+                summarized_left = result.get(
+                    'context_left', context_left[:200])
+                summarized_right = result.get(
+                    'context_right', context_right[:200])
+                return summarized_left, summarized_right
+            except json.JSONDecodeError:
+                # Fallback: rút gọn thủ công nếu LLM không trả về JSON
+                return context_left[:200], context_right[:200]
+
+        except Exception as e:
+            print(f"Error summarizing context with LLM: {e}")
+            # Fallback: trả về context gốc đã rút ngắn
+            return context_left[:200], context_right[:200]
+
     def extract(self, text: str, file_name: str = 'unknown', metadata: Dict = None) -> List[Dict]:
         """Extract AUTOSAR entities from text.
 
@@ -113,6 +243,32 @@ class AUTOSARNodeExtractor:
                         node_dict.update(metadata)
 
                     output.append(node_dict)
+
+            # Xử lý nodes trùng lặp: gộp context và rút gọn bằng LLM
+            if output:
+                print(f"  Trước khi gộp: {len(output)} nodes")
+                merged_nodes = self._merge_duplicate_nodes(output)
+                print(f"  Sau khi gộp: {len(merged_nodes)} nodes")
+
+                # Rút gọn context của các nodes đã gộp bằng LLM
+                final_nodes = []
+                for node in merged_nodes:
+                    if node.get('_duplicate_count', 1) > 1:
+                        # Node đã được gộp, cần rút gọn context
+                        print(
+                            f"  Đang rút gọn context cho node: {node.get('name')} ({node.get('_duplicate_count')} lần trùng)")
+                        summarized_left, summarized_right = self._summarize_context_with_llm(
+                            node.get('context_left', ''),
+                            node.get('context_right', ''),
+                            node.get('name', '')
+                        )
+                        node['context_left'] = summarized_left
+                        node['context_right'] = summarized_right
+                        # Xóa field tạm
+                        node.pop('_duplicate_count', None)
+                    final_nodes.append(node)
+
+                return final_nodes
 
             return output
 
