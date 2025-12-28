@@ -44,8 +44,15 @@ class AUTOSARNodeExtractor:
         # Nhóm nodes theo key (name + semantic_type)
         node_groups = {}
         for node in nodes:
-            key = (node.get('name', '').strip().lower(),
-                   node.get('semantic_type', '').strip().lower())
+            # Xử lý None values an toàn - chuyển thành string rỗng trước khi strip
+            name = node.get('name')
+            semantic_type = node.get('semantic_type')
+            
+            # Chuyển đổi an toàn: None -> '', sau đó strip và lower
+            name_str = str(name).strip().lower() if name is not None else ''
+            semantic_type_str = str(semantic_type).strip().lower() if semantic_type is not None else ''
+            
+            key = (name_str, semantic_type_str)
 
             if key not in node_groups:
                 node_groups[key] = []
@@ -61,21 +68,31 @@ class AUTOSARNodeExtractor:
                 # Có trùng, gộp lại
                 base_node = group[0].copy()
 
-                # Gộp tất cả context_left và context_right
-                all_context_left = [n.get('context_left', '')
-                                    for n in group if n.get('context_left')]
-                all_context_right = [n.get('context_right', '')
-                                     for n in group if n.get('context_right')]
+                # Gộp tất cả context_left và context_right từ TẤT CẢ nodes trong group
+                # Sử dụng 'in' check thay vì truthy check để không bỏ sót empty string
+                all_context_left = []
+                all_context_right = []
+                for n in group:
+                    # Lấy context_left nếu key tồn tại (kể cả empty string)
+                    if 'context_left' in n:
+                        context_left = n.get('context_left', '')
+                        if context_left is not None:
+                            all_context_left.append(str(context_left))
+                    # Lấy context_right nếu key tồn tại (kể cả empty string)
+                    if 'context_right' in n:
+                        context_right = n.get('context_right', '')
+                        if context_right is not None:
+                            all_context_right.append(str(context_right))
 
-                # Loại bỏ empty và duplicate
+                # Loại bỏ empty và duplicate, giữ lại thứ tự
                 unique_left = list(dict.fromkeys(
-                    [c.strip() for c in all_context_left if c.strip()]))
+                    [c.strip() for c in all_context_left if c and c.strip()]))
                 unique_right = list(dict.fromkeys(
-                    [c.strip() for c in all_context_right if c.strip()]))
+                    [c.strip() for c in all_context_right if c and c.strip()]))
 
                 # Gộp context lại
-                merged_context_left = ' ... '.join(unique_left)
-                merged_context_right = ' ... '.join(unique_right)
+                merged_context_left = ' ... '.join(unique_left) if unique_left else ''
+                merged_context_right = ' ... '.join(unique_right) if unique_right else ''
 
                 base_node['context_left'] = merged_context_left
                 base_node['context_right'] = merged_context_right
