@@ -1,0 +1,64 @@
+Schema nebula graph  Entity - REL -> Entity Entity - HAVE_INFORMATION_IN -> Chunk Chunk - PARAGRAPH_OF -> Document
+ 
+ 
+Tag details Entity Entity.name | type: string
+ 
+Entity.entity_type | type: string
+ 
+Entity.description | type: string
+ 
+Entity.aliases | type: string
+ 
+Entity.identifiers | type: string
+ 
+Entity.evidence_pages | type: string
+ 
+Entity.evidence_items | type: string
+ 
+Entity.source | type: string
+ 
+ 
+Tag details Chunk
+ 
+Chunk.name | type: string
+ 
+Chunk.toc_type | type: string
+ 
+Chunk.description | type: string
+ 
+Chunk.doc_filename | type: string
+ 
+Chunk.docling_chunk_id | type: string
+ 
+Chunk.heading_path | type: string
+ 
+Chunk.evidence_pages | type: string
+ 
+Chunk.evidence_items | type: string
+ 
+Chunk.cited_images | type: string
+ 
+ 
+Tag details Document Document.name | type: string
+ 
+Document.filename | type: string
+ 
+ 
+Edge Type details REL REL.keywords | type: string
+ 
+REL.description | type: string
+ 
+REL.evidence_pages | type: string
+ 
+REL.evidence_items | type: string
+ 
+REL.source_chunk | type: string
+ 
+Edge Type details HAVE_INFORMATION_IN HAVE_INFORMATION_IN.description | type: string
+ 
+HAVE_INFORMATION_IN.evidence_pages | type: string
+ 
+HAVE_INFORMATION_IN.evidence_items | type: string
+ 
+ 
+Edge Type details PARAGRAPH_OF PARAGRAPH_OF.description | type: string
