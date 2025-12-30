@@ -110,66 +110,41 @@ async def retrieve_nodes_by_text(
 
     try:
         for keyword in keywords:
-            # nGQL query to find Entity nodes by name
-            # Option 1: Using LOOKUP (requires index on Entity.name)
-            # Option 2: Using FETCH PROP with WHERE (if no index, use full scan)
-            # We'll try LOOKUP first, fallback to FETCH PROP if needed
-            query = f"""
-            LOOKUP ON Entity WHERE Entity.name CONTAINS "{keyword}"
-            YIELD id(vertex) AS id, properties(vertex).name AS name, 
-                   properties(vertex).entity_type AS entity_type,
-                   properties(vertex).description AS description,
-                   properties(vertex).aliases AS aliases,
-                   properties(vertex).identifiers AS identifiers,
-                   properties(vertex).evidence_pages AS evidence_pages,
-                   properties(vertex).evidence_items AS evidence_items,
-                   properties(vertex).source AS source
-            LIMIT {top_k}
-            """
+            # Escape quotes in keyword to prevent injection
+            safe_keyword = keyword.replace('"', '\\"')
 
-            # Alternative query if LOOKUP doesn't work (full scan - slower but works without index)
-            # query_alt = f"""
-            # MATCH (v:Entity)
-            # WHERE v.name CONTAINS "{keyword}"
-            # RETURN id(v) AS id, v.name AS name, v.entity_type AS entity_type,
-            #        v.description AS description, v.aliases AS aliases,
-            #        v.identifiers AS identifiers, v.evidence_pages AS evidence_pages,
-            #        v.evidence_items AS evidence_items, v.source AS source
-            # LIMIT {top_k}
-            # """
+            # nGQL query using MATCH and WHERE with properties
+            query = f'''
+            MATCH (e:Entity)
+            WHERE properties(e).name == "{safe_keyword}"
+            RETURN id(e) AS id,
+                properties(e).name AS name,
+                properties(e).entity_type AS entity_type,
+                properties(e).description AS description,
+                properties(e).aliases AS aliases,
+                properties(e).identifiers AS identifiers,
+                properties(e).evidence_pages AS evidence_pages,
+                properties(e).evidence_items AS evidence_items,
+                properties(e).source AS source
+            LIMIT {top_k}
+            '''
 
             try:
                 logger.info(
-                    f"Searching for Entity nodes containing: '{keyword}'")
-                results = None
-                query_error = None
+                    f"Searching for Entity nodes with name: '{keyword}'")
 
-                # Try LOOKUP query first (requires index)
-                try:
-                    if hasattr(nebula_client, 'execute_query'):
-                        results = await nebula_client.execute_query(query)
-                    elif hasattr(nebula_client, 'execute'):
-                        results = await nebula_client.execute(query)
-                    else:
-                        loop = asyncio.get_event_loop()
-                        results = await loop.run_in_executor(
-                            None,
-                            lambda: nebula_client.execute(query)
-                        )
-                except Exception as lookup_error:
-                    query_error = lookup_error
-                    logger.warning(
-                        f"LOOKUP query failed (may need index): {str(lookup_error)}")
-                    # Fallback: Use FETCH PROP with full scan (slower but works without index)
-                    # Note: This is a simplified approach - in production, you might want to use
-                    # a different query pattern or ensure indexes are created
-                    logger.info("Attempting alternative query method...")
-                    # For now, we'll log the error and continue with empty results
-                    # The user should create an index: CREATE TAG INDEX entity_name_index ON Entity(name(255))
-
-                if query_error and not results:
-                    logger.warning(f"Could not retrieve nodes for keyword '{keyword}'. "
-                                   f"Please ensure an index exists: CREATE TAG INDEX entity_name_index ON Entity(name(255))")
+                # Execute query using nebula client
+                if hasattr(nebula_client, 'execute_query'):
+                    results = await nebula_client.execute_query(query)
+                elif hasattr(nebula_client, 'execute'):
+                    results = await nebula_client.execute(query)
+                else:
+                    # Fallback: assume it's a sync method
+                    loop = asyncio.get_event_loop()
+                    results = await loop.run_in_executor(
+                        None,
+                        lambda q=query: nebula_client.execute(q)
+                    )
 
                 logger.info(
                     f"Found {len(results) if results else 0} Entity nodes for keyword '{keyword}'")
